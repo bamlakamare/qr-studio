@@ -33,6 +33,13 @@ interface ExportSettings {
   padding: number;
 }
 
+interface CardComponentProps {
+  settings: Settings;
+  qrUrl: string;
+  exportMode?: boolean;
+  exportSettings?: ExportSettings;
+}
+
 // Extend window interface for html2canvas
 declare global {
   interface Window {
