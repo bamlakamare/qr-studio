@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
-// Use Edge Runtime for faster generation
-export const runtime = 'edge';
+// Use Node.js Runtime for better compatibility with ImageResponse and external fetches
+export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -25,6 +25,15 @@ export async function GET(request: Request) {
     // 2. Generate the internal QR code image URL
     const qrRawUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(url)}&color=${qrColor.replace('#', '')}&bgcolor=${qrBgColor.replace('#', '')}&margin=0`;
 
+    // Fetch the image manually to passed as ArrayBuffer
+    const res = await fetch(qrRawUrl);
+    if (!res.ok) {
+        return new Response('Failed to generate QR code', { status: 500 });
+    }
+    const qrArrayBuffer = await res.arrayBuffer();
+    const qrBase64 = Buffer.from(qrArrayBuffer).toString('base64');
+    const qrDataUri = `data:image/png;base64,${qrBase64}`;
+
     // 3. Render the Image
     return new ImageResponse(
         (
@@ -36,7 +45,7 @@ export async function GET(request: Request) {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: pageBgColor === 'transparent' ? undefined : pageBgColor,
+                    backgroundColor: pageBgColor === 'transparent' ? 'transparent' : pageBgColor,
                 }}
             >
                 <div
@@ -44,7 +53,7 @@ export async function GET(request: Request) {
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        backgroundColor: cardColor === 'transparent' ? undefined : cardColor,
+                        backgroundColor: cardColor === 'transparent' ? 'transparent' : cardColor,
                         borderRadius: 30,
                         padding: 32,
                         boxShadow: cardColor !== 'transparent' ? '0 10px 30px rgba(0, 0, 0, 0.5)' : 'none',
@@ -78,7 +87,7 @@ export async function GET(request: Request) {
                             )}
                             {arrowStyle === 'chevron' && (
                                 <svg width="40" height="20" viewBox="0 0 40 20" fill="none">
-                                    <path d="M2 2 L20 18 L38 2" stroke={arrowColor} strokeWidth="6" fill="none"/>
+                                    <path d="M2 2 L20 18 L38 2" stroke={arrowColor} strokeWidth="6" fill="none" />
                                 </svg>
                             )}
                             {arrowStyle === 'bar' && (
@@ -102,7 +111,7 @@ export async function GET(request: Request) {
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                            src={qrRawUrl}
+                            src={qrDataUri}
                             width="218"
                             height="218"
                             style={{ objectFit: 'contain' }}
@@ -115,6 +124,9 @@ export async function GET(request: Request) {
         {
             width: 400,
             height: 500,
+            headers: {
+                'Content-Disposition': 'attachment; filename="qr-code.png"',
+            },
         }
     );
 }
