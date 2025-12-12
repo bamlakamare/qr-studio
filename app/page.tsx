@@ -59,7 +59,7 @@ const defaults: Settings = {
 };
 
 export default function QRStudio() {
-  // --- URL Parameter Logic (Browser Native for Preview Compatibility) ---
+  // --- URL Parameter Logic ---
   const getParams = () => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search);
@@ -92,7 +92,6 @@ export default function QRStudio() {
     if (params.has('acolor')) newSettings.arrowColor = params.get('acolor')!;
     if (params.has('astyle')) newSettings.arrowStyle = params.get('astyle')!;
 
-    // If embedding, default page background to transparent if not explicitly set
     if (embedView && !params.has('bg')) {
       newSettings.pageBgColor = 'transparent';
     }
@@ -116,7 +115,8 @@ export default function QRStudio() {
     const color = settings.qrColor.replace('#', '');
     const bg = settings.qrBgColor.replace('#', '');
     const data = encodeURIComponent(settings.url);
-    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${data}&color=${color}&bgcolor=${bg}&margin=0`);
+    // Use margin=1 to prevent clipping, handled nicely by the white box
+    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${data}&color=${color}&bgcolor=${bg}&margin=1`);
   }, [settings.url, settings.qrColor, settings.qrBgColor]);
 
   const handleChange = (key: keyof Settings, value: any) => {
@@ -134,7 +134,7 @@ export default function QRStudio() {
     }
   };
 
-  // --- Render for Embed Mode (Minimal UI) ---
+  // --- Render for Embed Mode ---
   if (isEmbedMode) {
     return (
         <div
@@ -149,7 +149,7 @@ export default function QRStudio() {
     );
   }
 
-  // --- Render for Studio Mode (Full UI) ---
+  // --- Render for Studio Mode ---
   return (
       <div className="min-h-screen w-full flex flex-col md:flex-row text-slate-800 font-sans bg-slate-50">
 
@@ -348,13 +348,7 @@ export default function QRStudio() {
 
 /* --- Components --- */
 
-interface CardComponentProps {
-  settings: Settings;
-  qrUrl: string;
-  exportMode?: boolean;
-  exportSettings?: ExportSettings;
-}
-
+// Replaced Tailwind with Inline Styles to fix html2canvas "lab()" errors
 const CardComponent: React.FC<CardComponentProps> = ({ settings, qrUrl, exportMode = false, exportSettings }) => {
   const showText = exportMode && exportSettings ? exportSettings.includeText : true;
   const showCardBg = exportMode && exportSettings ? exportSettings.includeCardBg : true;
@@ -362,7 +356,8 @@ const CardComponent: React.FC<CardComponentProps> = ({ settings, qrUrl, exportMo
   const padding = exportMode && exportSettings ? exportSettings.padding : 32;
 
   const cardBg = showCardBg ? settings.cardColor : 'transparent';
-  const shadowClass = showCardBg ? 'shadow-2xl' : '';
+  // Use inline box-shadow instead of Tailwind
+  const shadowStyle = showCardBg ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : 'none';
 
   const getFontFamily = () => {
     switch(settings.scanMeFont) {
@@ -375,23 +370,31 @@ const CardComponent: React.FC<CardComponentProps> = ({ settings, qrUrl, exportMo
 
   return (
       <div
-          className={`relative flex flex-col items-center rounded-[30px] transition-all ${shadowClass}`}
           style={{
             backgroundColor: cardBg,
             width: '320px',
             padding: `${padding}px`,
-            boxShadow: showCardBg ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : 'none'
+            boxShadow: shadowStyle,
+            borderRadius: '30px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+            transition: 'all 0.3s ease'
           }}
       >
         {/* Header Text */}
         {showText && settings.scanMeSize > 0 && (
             <h2
-                className="tracking-wider mb-2 text-center uppercase"
                 style={{
                   color: settings.scanMeColor,
                   fontSize: `${settings.scanMeSize}px`,
                   fontFamily: getFontFamily(),
-                  fontWeight: settings.scanMeWeight as any
+                  fontWeight: settings.scanMeWeight as any,
+                  marginBottom: '8px',
+                  textAlign: 'center',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
                 }}
             >
               {settings.scanMeText}
@@ -400,7 +403,7 @@ const CardComponent: React.FC<CardComponentProps> = ({ settings, qrUrl, exportMo
 
         {/* The Arrow */}
         {showArrow && settings.arrowStyle !== 'none' && (
-            <div className="w-full flex justify-center mb-6 h-6 items-end">
+            <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '24px', height: '24px', alignItems: 'flex-end' }}>
               {settings.arrowStyle === 'triangle' && (
                   <div
                       style={{
@@ -436,25 +439,257 @@ const CardComponent: React.FC<CardComponentProps> = ({ settings, qrUrl, exportMo
 
         {/* QR Container */}
         <div
-            className="p-4 rounded-2xl w-full aspect-square flex items-center justify-center"
-            style={{ backgroundColor: settings.qrBgColor }}
+            style={{
+              backgroundColor: settings.qrBgColor,
+              padding: '16px',
+              borderRadius: '16px',
+              width: '100%',
+              aspectRatio: '1 / 1',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
         >
           {qrUrl ? (
               <img
                   src={qrUrl}
                   alt="QR Code"
-                  className="w-full h-full object-contain mix-blend-multiply"
-                  style={{ imageRendering: 'pixelated' }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    // Mix-blend removed to avoid download artifacts
+                    imageRendering: 'pixelated'
+                  }}
                   crossOrigin="anonymous"
               />
           ) : (
-              <div className="text-slate-300 text-sm">Loading...</div>
+              <div style={{ color: '#cbd5e1', fontSize: '14px' }}>Loading...</div>
           )}
         </div>
       </div>
   );
 };
 
+/* --- Helpers --- */
+const getPatternStyle = (settings: Settings): React.CSSProperties => {
+  if (settings.bgImage) {
+    return {
+      backgroundImage: `url(${settings.bgImage})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    };
+  }
+  const color = 'rgba(255,255,255,0.1)';
+  switch (settings.bgPattern) {
+    case 'dots': return { backgroundImage: `radial-gradient(${color} 1px, transparent 1px)`, backgroundSize: '20px 20px' };
+    case 'grid': return { backgroundImage: `linear-gradient(${color} 1px, transparent 1px), linear-gradient(90deg, ${color} 1px, transparent 1px)`, backgroundSize: '20px 20px' };
+    case 'lines': return { backgroundImage: `repeating-linear-gradient(45deg, ${color}, ${color} 1px, transparent 1px, transparent 10px)` };
+    default: return {};
+  }
+};
+
+interface DownloadModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  qrUrl: string;
+  cardRef: React.RefObject<HTMLDivElement | null>;
+  settings: Settings;
+}
+
+const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose, qrUrl, cardRef, settings }) => {
+  const [activeTab, setActiveTab] = useState<'raw' | 'full' | 'custom'>('full');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  const [exportOpts, setExportOpts] = useState<ExportSettings>({
+    includeBg: true,
+    includeCardBg: true,
+    includeText: true,
+    includeArrow: true,
+    padding: 32
+  });
+
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Helper to build the API URL based on current selected tab
+  const getApiUrl = () => {
+    if (typeof window === 'undefined') return '';
+
+    // If raw, return the direct QR generator URL (upstream)
+    if (activeTab === 'raw') {
+      return qrUrl;
+    }
+
+    const baseUrl = window.location.origin + '/api/qr';
+    const params = new URLSearchParams();
+
+    // Common settings
+    params.set('url', settings.url);
+    params.set('qcolor', settings.qrColor);
+    params.set('qbg', settings.qrBgColor);
+
+    if (activeTab === 'full') {
+      // Full mode: Transparent BG, Standard Card settings
+      params.set('bg', 'transparent');
+      params.set('card', settings.cardColor);
+      params.set('text', settings.scanMeText);
+      params.set('tcolor', settings.scanMeColor);
+      params.set('tsize', settings.scanMeSize.toString());
+      params.set('acolor', settings.arrowColor);
+      params.set('astyle', settings.arrowStyle);
+    } else if (activeTab === 'custom') {
+      // Custom mode: Map exportOpts to API params
+
+      // Background - Explicitly check if included
+      params.set('bg', exportOpts.includeBg ? settings.pageBgColor : 'transparent');
+
+      // Card Background - Explicitly check if included
+      params.set('card', exportOpts.includeCardBg ? settings.cardColor : 'transparent');
+
+      // Text
+      if (exportOpts.includeText) {
+        params.set('text', settings.scanMeText);
+        params.set('tcolor', settings.scanMeColor);
+        params.set('tsize', settings.scanMeSize.toString());
+      } else {
+        params.set('text', ''); // Clear text to hide it
+        params.set('tsize', '0'); // Ensure size is 0
+      }
+
+      // Arrow
+      params.set('acolor', settings.arrowColor);
+      params.set('astyle', exportOpts.includeArrow ? settings.arrowStyle : 'none');
+    }
+
+    return `${baseUrl}?${params.toString()}`;
+  };
+
+  const handleCopyApiUrl = () => {
+    const url = getApiUrl();
+    if (url) {
+      navigator.clipboard.writeText(url);
+      alert('API URL copied to clipboard!');
+    }
+  };
+
+  const handleDownload = async () => {
+    setIsProcessing(true);
+    try {
+      if (activeTab === 'raw') {
+        const response = await fetch(qrUrl);
+        const blob = await response.blob();
+        saveBlob(blob, 'qr-code-only.png');
+      } else if (activeTab === 'full') {
+        if (window.html2canvas && cardRef.current) {
+          // Force transparent background for the capture
+          const canvas = await window.html2canvas(cardRef.current, {
+            backgroundColor: null, // Critical for transparency
+            scale: 4,
+            useCORS: true,
+            allowTaint: true
+          });
+          saveCanvas(canvas, 'qr-card-full.png');
+        }
+      } else if (activeTab === 'custom') {
+        if (window.html2canvas && previewRef.current) {
+          // If user unchecks "Page Background", ensure we capture transparently
+          const captureBg = exportOpts.includeBg ? settings.pageBgColor : null;
+
+          const canvas = await window.html2canvas(previewRef.current, {
+            backgroundColor: captureBg,
+            scale: 4,
+            useCORS: true,
+            allowTaint: true
+          });
+          saveCanvas(canvas, 'qr-custom-export.png');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Download failed. Please try again.");
+    }
+    setIsProcessing(false);
+  };
+
+  const saveBlob = (blob: Blob, name: string) => {
+    const url = window.URL.createObjectURL(blob);
+    triggerDownload(url, name);
+  };
+  const saveCanvas = (canvas: HTMLCanvasElement, name: string) => {
+    const url = canvas.toDataURL('image/png');
+    triggerDownload(url, name);
+  };
+  const triggerDownload = (url: string, name: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden">
+
+          <div className="w-full md:w-80 bg-slate-50 border-r border-slate-200 p-6 flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-lg">Download Options</h3>
+              <button onClick={onClose} className="md:hidden p-1 bg-slate-200 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+
+            <div className="space-y-2 mb-8">
+              <OptionButton active={activeTab === 'raw'} onClick={() => setActiveTab('raw')} icon={<QrCode className="w-4 h-4" />} title="QR Code Only" desc="Just the code, transparent background." />
+              <OptionButton active={activeTab === 'full'} onClick={() => setActiveTab('full')} icon={<Layout className="w-4 h-4" />} title="Full Card Design" desc="The complete card design as seen." />
+              <OptionButton active={activeTab === 'custom'} onClick={() => setActiveTab('custom')} icon={<Crop className="w-4 h-4" />} title="Custom Selection" desc="Toggle elements and resize." />
+            </div>
+
+            {activeTab === 'custom' && (
+                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 mb-6 overflow-y-auto">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Include</div>
+                  <Toggle label="Page Background" checked={exportOpts.includeBg} onChange={c => setExportOpts(p => ({...p, includeBg: c}))} />
+                  <Toggle label="Card Background" checked={exportOpts.includeCardBg} onChange={c => setExportOpts(p => ({...p, includeCardBg: c}))} />
+                  <Toggle label="Header Text" checked={exportOpts.includeText} onChange={c => setExportOpts(p => ({...p, includeText: c}))} />
+                  <Toggle label="Arrow Indicator" checked={exportOpts.includeArrow} onChange={c => setExportOpts(p => ({...p, includeArrow: c}))} />
+                  <div className="pt-2 border-t border-slate-100 mt-2">
+                    <div className="flex justify-between text-xs font-semibold mb-1"><span>Padding</span><span>{exportOpts.padding}px</span></div>
+                    <input type="range" min={0} max={100} value={exportOpts.padding} onChange={(e) => setExportOpts(p => ({...p, padding: parseInt(e.target.value)}))} className="w-full h-1.5 bg-slate-200 rounded-lg accent-emerald-600" />
+                  </div>
+                </div>
+            )}
+
+            <div className="mt-auto space-y-3">
+              <button
+                  onClick={handleCopyApiUrl}
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+              >
+                <Copy className="w-4 h-4" />
+                Copy API URL
+              </button>
+              <button onClick={handleDownload} disabled={isProcessing} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
+                {isProcessing ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {isProcessing ? 'Generating...' : 'Download PNG'}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 bg-slate-200 relative flex items-center justify-center p-8 overflow-auto">
+            <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-white rounded-full shadow-sm z-10 hidden md:block transition-all"><X className="w-5 h-5 text-slate-600" /></button>
+            <div className="border border-slate-300 shadow-sm bg-white/50 backdrop-blur rounded-lg p-1 absolute top-4 left-4 text-xs font-mono text-slate-500">Preview</div>
+            <div className="origin-center animate-in fade-in zoom-in duration-300">
+              {activeTab === 'raw' && <div className="bg-transparent border-2 border-dashed border-slate-400 p-1"><img src={qrUrl} alt="Preview" className="w-64 h-64 object-contain" /></div>}
+              {activeTab === 'full' && <div className="pointer-events-none scale-75 md:scale-90"><CardComponent settings={settings} qrUrl={qrUrl} /></div>}
+              {activeTab === 'custom' && <div ref={previewRef} className="inline-block" style={{ backgroundColor: exportOpts.includeBg ? settings.pageBgColor : 'transparent' }}><div style={exportOpts.includeBg ? getPatternStyle(settings) : {}} className="p-8"><CardComponent settings={settings} qrUrl={qrUrl} exportMode={true} exportSettings={exportOpts} /></div></div>}
+            </div>
+          </div>
+        </div>
+      </div>
+  );
+};
+
+// ... EmbedModal, OptionButton, Toggle, Section, InputGroup, ColorPicker (unchanged) ...
 interface EmbedModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -598,219 +833,7 @@ const EmbedModal: React.FC<EmbedModalProps> = ({ isOpen, onClose, settings }) =>
   );
 };
 
-interface DownloadModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  qrUrl: string;
-  cardRef: React.RefObject<HTMLDivElement | null>;
-  settings: Settings;
-}
-
-const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose, qrUrl, cardRef, settings }) => {
-  const [activeTab, setActiveTab] = useState<'raw' | 'full' | 'custom'>('full');
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-
-  const [exportOpts, setExportOpts] = useState<ExportSettings>({
-    includeBg: true,
-    includeCardBg: true,
-    includeText: true,
-    includeArrow: true,
-    padding: 32
-  });
-
-  const previewRef = useRef<HTMLDivElement>(null);
-
-  const getApiUrl = () => {
-    if (typeof window === 'undefined') return '';
-
-    const baseUrl = window.location.origin + '/api/qr';
-    const params = new URLSearchParams();
-
-    // Core params always needed
-    params.set('url', settings.url);
-    params.set('qcolor', settings.qrColor);
-    params.set('qbg', settings.qrBgColor);
-
-    if (activeTab === 'raw') {
-      // Raw: Transparent backgrounds, hide text and arrow
-      params.set('bg', 'transparent');
-      params.set('card', 'transparent');
-      params.set('text', '');
-      params.set('tsize', '0');
-      params.set('astyle', 'none');
-    } else if (activeTab === 'full') {
-      // Full: Card design with transparent outer background
-      params.set('bg', 'transparent');
-      params.set('card', settings.cardColor);
-      params.set('text', settings.scanMeText);
-      params.set('tcolor', settings.scanMeColor);
-      params.set('tsize', settings.scanMeSize.toString());
-      params.set('astyle', settings.arrowStyle);
-      params.set('acolor', settings.arrowColor);
-    } else if (activeTab === 'custom') {
-      // Custom: Map toggles to params
-      params.set('bg', exportOpts.includeBg ? settings.pageBgColor : 'transparent');
-      params.set('card', exportOpts.includeCardBg ? settings.cardColor : 'transparent');
-
-      if (exportOpts.includeText) {
-        params.set('text', settings.scanMeText);
-        params.set('tcolor', settings.scanMeColor);
-        params.set('tsize', settings.scanMeSize.toString());
-      } else {
-        params.set('text', '');
-        params.set('tsize', '0');
-      }
-
-      if (exportOpts.includeArrow) {
-        params.set('astyle', settings.arrowStyle);
-        params.set('acolor', settings.arrowColor);
-      } else {
-        params.set('astyle', 'none');
-      }
-    }
-
-    return `${baseUrl}?${params.toString()}`;
-  };
-
-  const handleCopyApiUrl = () => {
-    const url = getApiUrl();
-    if (url) {
-      navigator.clipboard.writeText(url);
-      alert('API URL copied to clipboard!');
-    }
-  };
-
-  const handleDownload = async () => {
-    setIsProcessing(true);
-    try {
-      if (activeTab === 'raw') {
-        const response = await fetch(qrUrl);
-        const blob = await response.blob();
-        saveBlob(blob, 'qr-code-only.png');
-      } else if (activeTab === 'full') {
-        if (window.html2canvas && cardRef.current) {
-          const canvas = await window.html2canvas(cardRef.current, {
-            backgroundColor: null,
-            scale: 4,
-            useCORS: true,
-            allowTaint: true
-          });
-          saveCanvas(canvas, 'qr-card-full.png');
-        }
-      } else if (activeTab === 'custom') {
-        if (window.html2canvas && previewRef.current) {
-          const canvas = await window.html2canvas(previewRef.current, {
-            backgroundColor: exportOpts.includeBg ? settings.pageBgColor : null,
-            scale: 4,
-            useCORS: true,
-            allowTaint: true
-          });
-          saveCanvas(canvas, 'qr-custom-export.png');
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Download failed. Please try again.");
-    }
-    setIsProcessing(false);
-  };
-
-  const saveBlob = (blob: Blob, name: string) => {
-    const url = window.URL.createObjectURL(blob);
-    triggerDownload(url, name);
-  };
-  const saveCanvas = (canvas: HTMLCanvasElement, name: string) => {
-    const url = canvas.toDataURL('image/png');
-    triggerDownload(url, name);
-  };
-  const triggerDownload = (url: string, name: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden">
-
-          <div className="w-full md:w-80 bg-slate-50 border-r border-slate-200 p-6 flex flex-col">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-lg">Download Options</h3>
-              <button onClick={onClose} className="md:hidden p-1 bg-slate-200 rounded-full"><X className="w-4 h-4" /></button>
-            </div>
-
-            <div className="space-y-2 mb-8">
-              <OptionButton active={activeTab === 'raw'} onClick={() => setActiveTab('raw')} icon={<QrCode className="w-4 h-4" />} title="QR Code Only" desc="Just the code, transparent background." />
-              <OptionButton active={activeTab === 'full'} onClick={() => setActiveTab('full')} icon={<Layout className="w-4 h-4" />} title="Full Card Design" desc="The complete card design as seen." />
-              <OptionButton active={activeTab === 'custom'} onClick={() => setActiveTab('custom')} icon={<Crop className="w-4 h-4" />} title="Custom Selection" desc="Toggle elements and resize." />
-            </div>
-
-            {activeTab === 'custom' && (
-                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 mb-6 overflow-y-auto">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Include</div>
-                  <Toggle label="Page Background" checked={exportOpts.includeBg} onChange={c => setExportOpts(p => ({...p, includeBg: c}))} />
-                  <Toggle label="Card Background" checked={exportOpts.includeCardBg} onChange={c => setExportOpts(p => ({...p, includeCardBg: c}))} />
-                  <Toggle label="Header Text" checked={exportOpts.includeText} onChange={c => setExportOpts(p => ({...p, includeText: c}))} />
-                  <Toggle label="Arrow Indicator" checked={exportOpts.includeArrow} onChange={c => setExportOpts(p => ({...p, includeArrow: c}))} />
-                  <div className="pt-2 border-t border-slate-100 mt-2">
-                    <div className="flex justify-between text-xs font-semibold mb-1"><span>Padding</span><span>{exportOpts.padding}px</span></div>
-                    <input type="range" min={0} max={100} value={exportOpts.padding} onChange={(e) => setExportOpts(p => ({...p, padding: parseInt(e.target.value)}))} className="w-full h-1.5 bg-slate-200 rounded-lg accent-emerald-600" />
-                  </div>
-                </div>
-            )}
-
-            <div className="mt-auto space-y-3">
-              <button
-                  onClick={handleCopyApiUrl}
-                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
-              >
-                <Copy className="w-4 h-4" />
-                Copy API URL
-              </button>
-              <button onClick={handleDownload} disabled={isProcessing} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-                {isProcessing ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {isProcessing ? 'Generating...' : 'Download PNG'}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 bg-slate-200 relative flex items-center justify-center p-8 overflow-auto">
-            <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-white rounded-full shadow-sm z-10 hidden md:block transition-all"><X className="w-5 h-5 text-slate-600" /></button>
-            <div className="border border-slate-300 shadow-sm bg-white/50 backdrop-blur rounded-lg p-1 absolute top-4 left-4 text-xs font-mono text-slate-500">Preview</div>
-            <div className="origin-center animate-in fade-in zoom-in duration-300">
-              {activeTab === 'raw' && <div className="bg-transparent border-2 border-dashed border-slate-400 p-1"><img src={qrUrl} alt="Preview" className="w-64 h-64 object-contain" /></div>}
-              {activeTab === 'full' && <div className="pointer-events-none scale-75 md:scale-90"><CardComponent settings={settings} qrUrl={qrUrl} /></div>}
-              {activeTab === 'custom' && <div ref={previewRef} className="inline-block" style={{ backgroundColor: exportOpts.includeBg ? settings.pageBgColor : 'transparent' }}><div style={exportOpts.includeBg ? getPatternStyle(settings) : {}} className="p-8"><CardComponent settings={settings} qrUrl={qrUrl} exportMode={true} exportSettings={exportOpts} /></div></div>}
-            </div>
-          </div>
-        </div>
-      </div>
-  );
-};
-
 /* --- Helpers --- */
-const getPatternStyle = (settings: Settings): React.CSSProperties => {
-  if (settings.bgImage) {
-    return {
-      backgroundImage: `url(${settings.bgImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center'
-    };
-  }
-  const color = 'rgba(255,255,255,0.1)';
-  switch (settings.bgPattern) {
-    case 'dots': return { backgroundImage: `radial-gradient(${color} 1px, transparent 1px)`, backgroundSize: '20px 20px' };
-    case 'grid': return { backgroundImage: `linear-gradient(${color} 1px, transparent 1px), linear-gradient(90deg, ${color} 1px, transparent 1px)`, backgroundSize: '20px 20px' };
-    case 'lines': return { backgroundImage: `repeating-linear-gradient(45deg, ${color}, ${color} 1px, transparent 1px, transparent 10px)` };
-    default: return {};
-  }
-};
-
 interface OptionButtonProps {
   active: boolean;
   onClick: () => void;

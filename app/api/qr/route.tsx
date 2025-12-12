@@ -6,20 +6,23 @@ export const runtime = 'edge';
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
 
-    // 1. Extract Settings from URL (matching your page.tsx defaults)
+    // 1. Extract Settings from URL
     const url = searchParams.get('url') || 'https://eticpa.et';
-    const pageBgColor = searchParams.get('bg') || 'transparent'; // Default to transparent for API usage
+    // DEFAULT CHANGE: Transparency by default for API if not specified
+    const pageBgColor = searchParams.get('bg') || 'transparent';
     const cardColor = searchParams.get('card') || '#18181b';
-    const scanMeText = searchParams.get('text') || 'SCAN ME';
+    const scanMeText = searchParams.get('text'); // Allow null for hidden
     const scanMeColor = searchParams.get('tcolor') || '#ffffff';
-    const scanMeSize = parseInt(searchParams.get('tsize') || '32');
+    const scanMeSizeStr = searchParams.get('tsize');
+    const scanMeSize = scanMeSizeStr ? parseInt(scanMeSizeStr) : 32;
+
     const qrColor = searchParams.get('qcolor') || '#000000';
     const qrBgColor = searchParams.get('qbg') || '#ffffff';
+
     const arrowColor = searchParams.get('acolor') || '#ffffff';
     const arrowStyle = searchParams.get('astyle') || 'triangle';
 
     // 2. Generate the internal QR code image URL
-    // We rely on the same external API to generate the raw QR bitmap
     const qrRawUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(url)}&color=${qrColor.replace('#', '')}&bgcolor=${qrBgColor.replace('#', '')}&margin=0`;
 
     // 3. Render the Image
@@ -33,7 +36,7 @@ export async function GET(request: Request) {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: pageBgColor,
+                    backgroundColor: pageBgColor === 'transparent' ? undefined : pageBgColor,
                 }}
             >
                 <div
@@ -41,15 +44,15 @@ export async function GET(request: Request) {
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        backgroundColor: cardColor,
+                        backgroundColor: cardColor === 'transparent' ? undefined : cardColor,
                         borderRadius: 30,
                         padding: 32,
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                        boxShadow: cardColor !== 'transparent' ? '0 10px 30px rgba(0, 0, 0, 0.5)' : 'none',
                         width: 320,
                     }}
                 >
                     {/* Header Text */}
-                    {scanMeSize > 0 && (
+                    {scanMeText && scanMeSize > 0 && (
                         <div
                             style={{
                                 color: scanMeColor,
@@ -69,7 +72,6 @@ export async function GET(request: Request) {
                     {arrowStyle !== 'none' && (
                         <div style={{ display: 'flex', marginBottom: 24 }}>
                             {arrowStyle === 'triangle' && (
-                                // Using SVG for reliable rendering in ImageResponse
                                 <svg width="80" height="20" viewBox="0 0 80 20" fill="none">
                                     <path d="M0 0L40 20L80 0H0Z" fill={arrowColor} />
                                 </svg>
@@ -98,9 +100,6 @@ export async function GET(request: Request) {
                             justifyContent: 'center',
                         }}
                     >
-                        {/* ImageResponse allows standard <img> tags.
-              We use the external QR API as the source.
-            */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             src={qrRawUrl}
@@ -115,7 +114,7 @@ export async function GET(request: Request) {
         ),
         {
             width: 400,
-            height: 500, // Fixed canvas size
+            height: 500,
         }
     );
 }
